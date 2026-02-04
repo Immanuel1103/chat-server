@@ -3,23 +3,28 @@ const http = require('http');
 const { Server } = require("socket.io");
 const mongoose = require('mongoose');
 
-// ★ 여기에 아까 그 MongoDB 주소를 다시 정확히 넣어주세요!
-// (비밀번호에 특수문자가 있다면 뺀 걸로 넣으셔야 합니다)
+// ★ MongoDB 주소 (기존 주소 그대로 유지)
 const MONGO_URL = "mongodb+srv://admin:admin3257@cluster0.jr6vxpa.mongodb.net/?appName=Cluster0";
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-// [안전장치 1] DB 연결 시도 (실패해도 서버는 안 죽게 설정)
+// DB 연결
 mongoose.connect(MONGO_URL)
   .then(() => console.log('✅ MongoDB 연결 성공!'))
-  .catch((err) => {
-    console.log('⚠️ MongoDB 연결 실패 (채팅은 계속 됩니다):');
-    console.log(err.message); // 에러 이유를 보여줌
-  });
+  .catch((err) => console.log('⚠️ DB 연결 에러:', err));
 
-// 데이터 모델 (Schema)
+// 1. 유저 장부 (회원정보)
+const userSchema = new mongoose.Schema({
+  username: { type: String, unique: true, required: true }, // 아이디 (중복불가)
+  password: { type: String, required: true },               // 비밀번호
+  isAdmin: { type: Boolean, default: false },               // 관리자 여부 (나중을 위해!)
+  createdAt: { type: Date, default: Date.now }
+});
+const User = mongoose.model('User', userSchema);
+
+// 2. 메시지 장부
 const chatSchema = new mongoose.Schema({
   user: String,
   text: String,
@@ -28,38 +33,63 @@ const chatSchema = new mongoose.Schema({
 });
 const Message = mongoose.model('Message', chatSchema);
 
-io.on('connection', async (socket) => {
+io.on('connection', (socket) => {
   console.log('유저 접속:', socket.id);
 
-  // [수정됨] 접속하자마자 주지 않고, "달라고 할 때" 줍니다.
-  socket.on('request history', async () => {
+  // [기능 1] 회원가입
+  socket.on('register', async ({ username, password }) => {
     try {
-      if (mongoose.connection.readyState === 1) {
-        // DB에서 최근 50개 가져오기
-        const oldMessages = await Message.find().sort({ createdAt: 1 }).limit(50);
-        
-        // 요청한 사람(socket)에게만 보내주기
-        // 중요: forEach 대신 한 번에 배열로 보내는 게 더 깔끔하지만, 
-        // 기존 클라이언트 코드 유지를 위해 하나씩 보냅니다.
-        oldMessages.forEach((msg) => {
-          socket.emit('chat message', { 
-            user: msg.user, 
-            text: msg.text, 
-            time: msg.time 
-          });
-        });
-        console.log('📜 과거 대화 전송 완료');
+      const existingUser = await User.findOne({ username });
+      if (existingUser) {
+        socket.emit('auth_error', '이미 존재하는 아이디입니다.');
+      } else {
+        // 새 유저 저장 (첫 번째 가입자는 자동으로 관리자로 만들어줄까요? 일단은 모두 일반유저)
+        const newUser = new User({ username, password, isAdmin: false });
+        await newUser.save();
+        socket.emit('register_success', '회원가입 성공! 로그인해주세요.');
       }
     } catch (e) {
-      console.log('과거 대화 불러오기 실패', e);
+      socket.emit('auth_error', '회원가입 중 오류 발생');
     }
   });
 
+  // [기능 2] 로그인
+  socket.on('login', async ({ username, password }) => {
+    try {
+      const user = await User.findOne({ username, password });
+      if (user) {
+        socket.emit('login_success', { 
+          username: user.username, 
+          isAdmin: user.isAdmin 
+        });
+      } else {
+        socket.emit('auth_error', '아이디 또는 비밀번호가 틀렸습니다.');
+      }
+    } catch (e) {
+      socket.emit('auth_error', '로그인 중 오류 발생');
+    }
+  });
+
+  // [기능 3] 대화 불러오기 (로그인 성공한 사람만 요청하겠죠?)
+  socket.on('request history', async () => {
+    try {
+      const oldMessages = await Message.find().sort({ createdAt: 1 }).limit(50);
+      oldMessages.forEach((msg) => {
+        socket.emit('chat message', { 
+          user: msg.user, 
+          text: msg.text, 
+          time: msg.time 
+        });
+      });
+    } catch (e) {}
+  });
+
+  // [기능 4] 메시지 전송
   socket.on('chat message', async (data) => {
-    // ... (여기는 기존과 똑같습니다) ...
     const now = new Date();
     const timeString = now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
 
+    // 나중에 관리자인지 확인해서 표시할 수도 있음
     io.emit('chat message', {
       user: data.user,
       text: data.text,
@@ -67,24 +97,16 @@ io.on('connection', async (socket) => {
     });
 
     try {
-      if (mongoose.connection.readyState === 1) {
-        const newMessage = new Message({
-          user: data.user,
-          text: data.text,
-          time: timeString,
-        });
-        await newMessage.save();
-      }
-    } catch (e) {
-      console.log('저장 실패', e);
-    }
-  });
-
-  socket.on('disconnect', () => {
-    console.log('유저 나감');
+      const newMessage = new Message({
+        user: data.user,
+        text: data.text,
+        time: timeString,
+      });
+      await newMessage.save();
+    } catch (e) {}
   });
 });
 
 server.listen(3000, () => {
-  console.log('🚀 채팅 서버가 가동되었습니다 (3000번 포트)');
+  console.log('🚀 서버 가동 중');
 });
