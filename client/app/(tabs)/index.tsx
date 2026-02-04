@@ -48,9 +48,14 @@ export default function App() {
       Alert.alert('알림', '닉네임을 2글자 이상 입력해주세요.');
       return;
     }
-    // 들어갈 때 기존 메시지 초기화 (서버에서 다시 받아올 거니까)
+    // 1. 화면의 메시지를 먼저 싹 비웁니다.
     setMessages([]); 
+    
+    // 2. 입장 상태로 변경
     setIsJoined(true);
+
+    // 3. [핵심] 서버에게 "옛날 대화 주세요!"라고 요청(신호)을 보냅니다.
+    socket.emit('request history');
   };
 
   // ★ [추가된 기능] 채팅방 나가기 (로그아웃)

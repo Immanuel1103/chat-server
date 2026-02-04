@@ -79,38 +79,6 @@ io.on('connection', async (socket) => {
       console.log('저장 실패', e);
     }
   });
-  
-  // ... (나머지 동일)
-});
-
-  socket.on('chat message', async (data) => {
-    // 1. 시간 계산
-    const now = new Date();
-    const timeString = now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
-
-    // 2. 일단 채팅방에 먼저 뿌리기 (DB 저장 기다리지 않음 -> 속도 빠름)
-    io.emit('chat message', {
-      user: data.user,
-      text: data.text,
-      time: timeString
-    });
-
-    // 3. 그 다음 DB에 저장 시도 (실패해도 유저는 모르게 함)
-    try {
-      if (mongoose.connection.readyState === 1) {
-        const newMessage = new Message({
-          user: data.user,
-          text: data.text,
-          time: timeString,
-        });
-        await newMessage.save();
-      } else {
-        console.log('DB 미연결로 인해 메시지 저장 안 됨');
-      }
-    } catch (e) {
-      console.log('메시지 저장 실패:', e.message);
-    }
-  });
 
   socket.on('disconnect', () => {
     console.log('유저 나감');
