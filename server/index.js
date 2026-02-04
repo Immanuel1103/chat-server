@@ -31,18 +31,57 @@ const Message = mongoose.model('Message', chatSchema);
 io.on('connection', async (socket) => {
   console.log('유저 접속:', socket.id);
 
-  // [안전장치 2] 과거 대화 불러오기 (DB 에러나면 무시하고 진행)
-  try {
-    // DB가 연결된 상태인지 확인 (1 = 연결됨)
-    if (mongoose.connection.readyState === 1) {
-      const oldMessages = await Message.find().sort({ createdAt: 1 }).limit(50);
-      oldMessages.forEach((msg) => {
-        socket.emit('chat message', { user: msg.user, text: msg.text, time: msg.time });
-      });
+  // [수정됨] 접속하자마자 주지 않고, "달라고 할 때" 줍니다.
+  socket.on('request history', async () => {
+    try {
+      if (mongoose.connection.readyState === 1) {
+        // DB에서 최근 50개 가져오기
+        const oldMessages = await Message.find().sort({ createdAt: 1 }).limit(50);
+        
+        // 요청한 사람(socket)에게만 보내주기
+        // 중요: forEach 대신 한 번에 배열로 보내는 게 더 깔끔하지만, 
+        // 기존 클라이언트 코드 유지를 위해 하나씩 보냅니다.
+        oldMessages.forEach((msg) => {
+          socket.emit('chat message', { 
+            user: msg.user, 
+            text: msg.text, 
+            time: msg.time 
+          });
+        });
+        console.log('📜 과거 대화 전송 완료');
+      }
+    } catch (e) {
+      console.log('과거 대화 불러오기 실패', e);
     }
-  } catch (e) {
-    console.log('과거 대화 불러오기 실패 (무시함)');
-  }
+  });
+
+  socket.on('chat message', async (data) => {
+    // ... (여기는 기존과 똑같습니다) ...
+    const now = new Date();
+    const timeString = now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+
+    io.emit('chat message', {
+      user: data.user,
+      text: data.text,
+      time: timeString
+    });
+
+    try {
+      if (mongoose.connection.readyState === 1) {
+        const newMessage = new Message({
+          user: data.user,
+          text: data.text,
+          time: timeString,
+        });
+        await newMessage.save();
+      }
+    } catch (e) {
+      console.log('저장 실패', e);
+    }
+  });
+  
+  // ... (나머지 동일)
+});
 
   socket.on('chat message', async (data) => {
     // 1. 시간 계산
