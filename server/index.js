@@ -5,7 +5,7 @@ const mongoose = require('mongoose');
 
 // ★ 여기에 아까 그 MongoDB 주소를 다시 정확히 넣어주세요!
 // (비밀번호에 특수문자가 있다면 뺀 걸로 넣으셔야 합니다)
-const MONGO_URL = "mongodb+srv://admin:admin3257@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
+const MONGO_URL = "mongodb+srv://admin:admin3257@cluster0.jr6vxpa.mongodb.net/?appName=Cluster0";
 
 const app = express();
 const server = http.createServer(app);
