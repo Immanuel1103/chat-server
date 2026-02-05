@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>회원가입 테스트</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background-color: #f0f2f5; }
+        .container { max-width: 400px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: #333; }
+        input { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; margin-top: 10px;}
+        button:hover { background-color: #0056b3; }
+        .msg { margin-top: 10px; text-align: center; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>회원가입</h2>
+    <input type="text" id="loginId" placeholder="아이디 (영문소문자+숫자, 4~12자)">
+    <input type="password" id="password" placeholder="비밀번호 (4자 이상)">
+    <input type="text" id="name" placeholder="이름">
+    <input type="text" id="nickname" placeholder="닉네임">
+    <button onclick="signup()">가입하기</button>
+    <div id="message" class="msg"></div>
+</div>
+
+<script>
+    async function signup() {
+        // 1. 입력한 값 가져오기
+        const loginId = document.getElementById('loginId').value;
+        const password = document.getElementById('password').value;
+        const name = document.getElementById('name').value;
+        const nickname = document.getElementById('nickname').value;
+
+        const msgBox = document.getElementById('message');
+
+        try {
+            // 2. 서버로 데이터 전송 (POST 요청)
+            const response = await fetch('http://localhost:3000/signup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ loginId, password, name, nickname })
+            });
+
+            const result = await response.json();
+
+            // 3. 서버 응답 결과 보여주기
+            if (response.ok) {
+                msgBox.style.color = 'green';
+                msgBox.innerText = "성공: " + result.message;
+                console.log("받은 ID:", result.userId); // 개발자 도구 콘솔에서 확인 가능
+            } else {
+                msgBox.style.color = 'red';
+                msgBox.innerText = "실패: " + result.message;
+            }
+
+        } catch (error) {
+            console.error('Error:', error);
+            msgBox.style.color = 'red';
+            msgBox.innerText = "서버와 연결할 수 없습니다.";
+        }
+    }
+</script>
+
+</body>
+</html>
